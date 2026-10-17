@@ -53,7 +53,28 @@
     border-bottom: 1px solid var(--line); opacity: .9;
   }
   /* 圖形顯示區（海龜畫布會放在這裡） */
-  #graph { flex: 1; background: #fff; overflow: hidden; position: relative; }
+  #graphBox { flex: 1; background: #fff; overflow: hidden; position: relative; }
+  #graph { position: absolute; inset: 0; }
+
+  /* 表情符號托盤與貼紙 */
+  #tray {
+    display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .tray-emoji { font-size: 24px; cursor: grab; user-select: none; touch-action: none; }
+  #stickers { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .sticker {
+    position: absolute; font-size: 44px; cursor: grab; user-select: none;
+    transform: translate(-50%, -50%); pointer-events: auto; touch-action: none;
+  }
+  .ghost {
+    position: fixed; font-size: 44px; pointer-events: none; z-index: 99;
+    transform: translate(-50%, -50%);
+  }
+  #examples {
+    font-size: 14px; padding: 5px 8px; border-radius: 6px;
+    background: var(--line); color: var(--text); border: 0;
+  }
   /* 文字輸出區（print 的結果與錯誤訊息） */
   #out {
     flex: 1; margin: 0; padding: 8px 10px; overflow: auto;
@@ -83,6 +104,11 @@
 <body>
   <header>
     <h1>🎃 Python 小畫家</h1>
+    <select id="examples" title="載入範例程式">
+      <option value="">載入範例…</option>
+      <option value="square">正方形（迴圈）</option>
+      <option value="pumpkin">多瓣南瓜（迴圈）</option>
+    </select>
     <span id="status">載入 Python 中…</span>
     <button id="runBtn" disabled>▶ 執行 (Ctrl+Enter)</button>
     <button id="stopBtn">■ 停止</button>
@@ -93,8 +119,12 @@
     <!-- 左半部：圖形顯示（上）＋ 文字輸出（下） -->
     <section id="left">
       <div id="graphWrap">
-        <div class="label">圖形顯示</div>
-        <div id="graph"></div>
+        <div class="label">圖形顯示（拖曳下方表情符號到畫面上，雙擊可刪除）</div>
+        <div id="tray"></div>
+        <div id="graphBox">
+          <div id="graph"></div>
+          <div id="stickers"></div>
+        </div>
       </div>
       <div class="hsplit" id="hsplit" title="上下拖曳調整高度"></div>
       <div id="outWrap">
@@ -211,7 +241,11 @@ async function runCode() {
     await Sk.misceval.asyncToPromise(() =>
       Sk.importMainWithBody('<stdin>', false, codeBox.value, true));
   } catch (e) {
-    addOut('\n' + e.toString() + '\n', true);
+    if (e.toString().includes('TimeLimitError')) {
+      addOut('\n⏹ 已停止執行\n', true);       // 按「停止」時顯示的友善訊息
+    } else {
+      addOut('\n' + e.toString() + '\n', true);
+    }
   }
   running = false;
   runBtn.disabled = false;
@@ -220,7 +254,7 @@ async function runCode() {
 
 runBtn.onclick = runCode;
 $('stopBtn').onclick = () => { if (running && window.Sk) Sk.execLimit = 1; };
-$('clearBtn').onclick = () => { out.textContent = ''; graph.innerHTML = ''; };
+$('clearBtn').onclick = () => { out.textContent = ''; graph.innerHTML = ''; $('stickers').innerHTML = ''; };
 
 /* ---------- 3. 編輯器小功能：Tab 縮排、Ctrl/Cmd+Enter 執行 ---------- */
 codeBox.addEventListener('keydown', e => {
@@ -257,6 +291,103 @@ makeDraggable($('vsplit'), ev => {
   const max = $('main').clientWidth - 246;
   $('left').style.width = Math.max(160, Math.min(w, max)) + 'px';
 });
+/* ---------- 5. 範例選單 ---------- */
+const EXAMPLES = {
+  square: `import turtle
+
+t = turtle.Turtle()
+t.color("orange")      # 改改看：red、blue、green、purple…
+t.pensize(3)
+
+# 用迴圈畫一個正方形
+for i in range(4):
+    t.forward(100)
+    t.left(90)
+
+print("畫好囉！")
+`,
+  pumpkin: `import turtle
+
+t = turtle.Turtle()
+t.speed(6)
+t.pensize(2)
+t.color("orange")
+
+petals = 8          # 南瓜的瓣數：改成 6、10、12 看看
+
+for i in range(petals):
+    t.circle(60)
+    t.left(360 / petals)
+
+print("南瓜有", petals, "瓣")
+`
+};
+$('examples').onchange = e => {
+  if (EXAMPLES[e.target.value]) codeBox.value = EXAMPLES[e.target.value];
+  e.target.value = '';
+};
+
+/* ---------- 6. 表情符號：從托盤拖到畫面，貼紙可再拖動、雙擊刪除 ---------- */
+const EMOJIS = ['🎃', '👻', '🦇', '🕷️', '💀', '🍬', '🕸️', '🌙', '😱', '🧙'];
+const box = $('graphBox'), layer = $('stickers');
+
+EMOJIS.forEach(ch => {
+  const s = document.createElement('span');
+  s.className = 'tray-emoji';
+  s.textContent = ch;
+  s.addEventListener('pointerdown', e => dragNew(ch, e));
+  $('tray').appendChild(s);
+});
+
+function dragNew(ch, e) {
+  e.preventDefault();
+  const ghost = document.createElement('span');
+  ghost.className = 'ghost';
+  ghost.textContent = ch;
+  document.body.appendChild(ghost);
+  document.body.classList.add('dragging');
+  const place = ev => { ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; };
+  place(e);
+  const up = ev => {
+    window.removeEventListener('pointermove', place);
+    window.removeEventListener('pointerup', up);
+    ghost.remove();
+    document.body.classList.remove('dragging');
+    const r = box.getBoundingClientRect();
+    if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+      addSticker(ch, ev.clientX - r.left, ev.clientY - r.top);
+    }
+  };
+  window.addEventListener('pointermove', place);
+  window.addEventListener('pointerup', up);
+}
+
+function addSticker(ch, x, y) {
+  const s = document.createElement('span');
+  s.className = 'sticker';
+  s.textContent = ch;
+  s.style.left = x + 'px';
+  s.style.top = y + 'px';
+  s.addEventListener('dblclick', () => s.remove());
+  s.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    document.body.classList.add('dragging');
+    const move = ev => {
+      const r = box.getBoundingClientRect();
+      s.style.left = Math.max(0, Math.min(ev.clientX - r.left, r.width)) + 'px';
+      s.style.top = Math.max(0, Math.min(ev.clientY - r.top, r.height)) + 'px';
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.classList.remove('dragging');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+  layer.appendChild(s);
+}
+
 // 上下：調整「圖形顯示」高度
 makeDraggable($('hsplit'), ev => {
   const box = $('left').getBoundingClientRect();
