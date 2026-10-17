@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Python 小畫家</title>
+
+<!-- ============================================================
+  Codeing.html 檔案結構（用搜尋 "【區塊】" 可以快速跳到各區）
+  1. 【區塊】樣式 CSS
+  2. 【區塊】版面 HTML：左＝圖形顯示(上)+文字輸出(下)，右＝Python 編輯區
+  3. 【區塊】程式 JS：載入 Skulpt → 執行 Python → 拖曳調整寬度
+============================================================ -->
+
+<!-- ===================== 【區塊】樣式 CSS ===================== -->
+<style>
+  :root {
+    --bg: #1e1e2e; --panel: #282a3a; --line: #44475a;
+    --text: #f2f2f2; --accent: #ff8c1a; --err: #ff6b6b; --ok: #50fa7b;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif;
+    display: flex; flex-direction: column;
+  }
+
+  /* 上方標題列 */
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  #status { font-size: 13px; opacity: .8; }
+  button {
+    font-size: 15px; padding: 6px 16px; border: 0; border-radius: 6px;
+    cursor: pointer; font-weight: 600;
+  }
+  #runBtn { background: var(--accent); color: #fff; }
+  #runBtn:disabled { opacity: .4; cursor: not-allowed; }
+  #stopBtn, #clearBtn { background: var(--line); color: var(--text); }
+
+  /* 主要區域：左右分區 */
+  #main { flex: 1; display: flex; min-height: 0; }
+
+  /* 左半部（初始佔 1/3） */
+  #left { width: 33.333%; min-width: 160px; display: flex; flex-direction: column; min-height: 0; }
+  #graphWrap { flex: 0 0 55%; min-height: 80px; display: flex; flex-direction: column; }
+  #outWrap   { flex: 1; min-height: 60px; display: flex; flex-direction: column; }
+  .label {
+    font-size: 12px; padding: 4px 10px; background: var(--panel);
+    border-bottom: 1px solid var(--line); opacity: .9;
+  }
+  /* 圖形顯示區（海龜畫布會放在這裡） */
+  #graph { flex: 1; background: #fff; overflow: hidden; position: relative; }
+  /* 文字輸出區（print 的結果與錯誤訊息） */
+  #out {
+    flex: 1; margin: 0; padding: 8px 10px; overflow: auto;
+    font-family: Menlo, Consolas, monospace; font-size: 14px;
+    white-space: pre-wrap; background: #11111b;
+  }
+  #out .err { color: var(--err); }
+
+  /* 右半部（Python 編輯區，初始佔 2/3） */
+  #right { flex: 1; min-width: 240px; display: flex; flex-direction: column; min-height: 0; }
+  #code {
+    flex: 1; width: 100%; resize: none; border: 0; outline: 0; padding: 12px;
+    background: #11111b; color: var(--text);
+    font-family: Menlo, Consolas, monospace; font-size: 16px; line-height: 1.5;
+    tab-size: 4;
+  }
+
+  /* 可拖曳的分隔線 */
+  .vsplit { width: 6px; background: var(--line); cursor: col-resize; flex: 0 0 6px; }
+  .hsplit { height: 6px; background: var(--line); cursor: row-resize; flex: 0 0 6px; }
+  .vsplit:hover, .hsplit:hover { background: var(--accent); }
+  body.dragging { user-select: none; }
+</style>
+</head>
+
+<!-- ===================== 【區塊】版面 HTML ===================== -->
+<body>
+  <header>
+    <h1>🎃 Python 小畫家</h1>
+    <span id="status">載入 Python 中…</span>
+    <button id="runBtn" disabled>▶ 執行 (Ctrl+Enter)</button>
+    <button id="stopBtn">■ 停止</button>
+    <button id="clearBtn">清除</button>
+  </header>
+
+  <div id="main">
+    <!-- 左半部：圖形顯示（上）＋ 文字輸出（下） -->
+    <section id="left">
+      <div id="graphWrap">
+        <div class="label">圖形顯示</div>
+        <div id="graph"></div>
+      </div>
+      <div class="hsplit" id="hsplit" title="上下拖曳調整高度"></div>
+      <div id="outWrap">
+        <div class="label">輸出結果</div>
+        <pre id="out"></pre>
+      </div>
+    </section>
+
+    <div class="vsplit" id="vsplit" title="左右拖曳調整寬度"></div>
+
+    <!-- 右半部：Python 程式碼 -->
+    <section id="right">
+      <div class="label">Python 程式碼</div>
+<textarea id="code" spellcheck="false">import turtle
+
+t = turtle.Turtle()
+t.color("orange")      # 改改看：red、blue、green、purple…
+t.pensize(3)
+
+# 用迴圈畫一個正方形
+for i in range(4):
+    t.forward(100)
+    t.left(90)
+
+print("畫好囉！")
+</textarea>
+    </section>
+  </div>
+
+<!-- ===================== 【區塊】程式 JS ===================== -->
+<script>
+const $ = id => document.getElementById(id);
+const out = $('out'), graph = $('graph'), codeBox = $('code');
+const runBtn = $('runBtn'), statusEl = $('status');
+let skulptReady = false, running = false;
+
+/* ---------- 1. 載入 Skulpt（瀏覽器裡的 Python）---------- */
+function loadScript(urls) {
+  return new Promise((resolve, reject) => {
+    let i = 0;
+    (function next() {
+      if (i >= urls.length) return reject(new Error('載入失敗'));
+      const s = document.createElement('script');
+      s.src = urls[i++];
+      s.onload = resolve;
+      s.onerror = () => { s.remove(); next(); };
+      document.head.appendChild(s);
+    })();
+  });
+}
+
+(async function init() {
+  try {
+    await loadScript([
+      'https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/skulpt/1.2.0/skulpt.min.js'
+    ]);
+    await loadScript([
+      'https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/skulpt/1.2.0/skulpt-stdlib.js'
+    ]);
+    skulptReady = true;
+    runBtn.disabled = false;
+    statusEl.textContent = '✅ 準備好了';
+  } catch (e) {
+    statusEl.textContent = '❌ Python 載入失敗';
+    addOut('無法載入 Python 引擎，請確認電腦有連上網路後重新整理頁面。\n', true);
+  }
+})();
+
+/* ---------- 2. 輸出與執行 ---------- */
+function addOut(text, isErr) {
+  if (isErr) {
+    const span = document.createElement('span');
+    span.className = 'err';
+    span.textContent = text;
+    out.appendChild(span);
+  } else {
+    out.appendChild(document.createTextNode(text));
+  }
+  out.scrollTop = out.scrollHeight;
+}
+
+function builtinRead(x) {
+  if (Sk.builtinFiles === undefined || Sk.builtinFiles['files'][x] === undefined)
+    throw "File not found: '" + x + "'";
+  return Sk.builtinFiles['files'][x];
+}
+
+async function runCode() {
+  if (!skulptReady || running) return;
+  running = true;
+  runBtn.disabled = true;
+  statusEl.textContent = '執行中…';
+  out.textContent = '';
+  graph.innerHTML = '';                       // 清掉上一次的圖
+
+  Sk.configure({
+    output: t => addOut(t, false),
+    read: builtinRead,
+    __future__: Sk.python3,
+    inputfun: p => { const v = prompt(p || ''); return v === null ? '' : v; },
+    inputfunTakesPrompt: true,
+    yieldLimit: 100,                          // 讓畫面可以即時更新、也能按「停止」
+    execLimit: Number.POSITIVE_INFINITY
+  });
+  Sk.TurtleGraphics = {
+    target: 'graph',
+    width: graph.clientWidth,
+    height: graph.clientHeight
+  };
+
+  try {
+    await Sk.misceval.asyncToPromise(() =>
+      Sk.importMainWithBody('<stdin>', false, codeBox.value, true));
+  } catch (e) {
+    addOut('\n' + e.toString() + '\n', true);
+  }
+  running = false;
+  runBtn.disabled = false;
+  statusEl.textContent = '✅ 準備好了';
+}
+
+runBtn.onclick = runCode;
+$('stopBtn').onclick = () => { if (running && window.Sk) Sk.execLimit = 1; };
+$('clearBtn').onclick = () => { out.textContent = ''; graph.innerHTML = ''; };
+
+/* ---------- 3. 編輯器小功能：Tab 縮排、Ctrl/Cmd+Enter 執行 ---------- */
+codeBox.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = codeBox.selectionStart, en = codeBox.selectionEnd;
+    codeBox.value = codeBox.value.slice(0, s) + '    ' + codeBox.value.slice(en);
+    codeBox.selectionStart = codeBox.selectionEnd = s + 4;
+  } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    runCode();
+  }
+});
+
+/* ---------- 4. 拖曳調整分區大小 ---------- */
+function makeDraggable(handle, onMove) {
+  handle.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    document.body.classList.add('dragging');
+    handle.setPointerCapture(e.pointerId);
+    const move = ev => onMove(ev);
+    const up = () => {
+      document.body.classList.remove('dragging');
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+  });
+}
+// 左右：調整「左半部」寬度
+makeDraggable($('vsplit'), ev => {
+  const w = ev.clientX - $('main').getBoundingClientRect().left;
+  const max = $('main').clientWidth - 246;
+  $('left').style.width = Math.max(160, Math.min(w, max)) + 'px';
+});
+// 上下：調整「圖形顯示」高度
+makeDraggable($('hsplit'), ev => {
+  const box = $('left').getBoundingClientRect();
+  const h = ev.clientY - box.top;
+  $('graphWrap').style.flex = '0 0 ' + Math.max(80, Math.min(h, box.height - 66)) + 'px';
+});
+</script>
+</body>
+</html>
