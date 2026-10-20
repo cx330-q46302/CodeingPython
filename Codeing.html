@@ -53,8 +53,27 @@
     border-bottom: 1px solid var(--line); opacity: .9;
   }
   /* 圖形顯示區（海龜畫布會放在這裡） */
-  #graphBox { flex: 1; background: #fff; overflow: hidden; position: relative; }
-  #graph { position: absolute; inset: 0; }
+  #graphBox {
+    flex: 1; background: #fff; overflow: hidden; position: relative;
+    cursor: grab; touch-action: none;
+  }
+  #graphBox.panning { cursor: grabbing; }
+  /* 世界層：平移與縮放都作用在這一層，海龜畫布與貼紙都放在裡面 */
+  #world {
+    position: absolute; left: 0; top: 0; width: 0; height: 0;
+    transform-origin: 0 0; will-change: transform;
+  }
+  #graph { position: absolute; }   /* 大小與位置由 JS 設定 */
+  #gridCv { position: absolute; left: 0; top: 0; pointer-events: none; }
+  #viewBtns {
+    position: absolute; right: 8px; top: 8px; z-index: 5;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #viewBtns button {
+    width: 30px; height: 30px; padding: 0; font-size: 18px; line-height: 1;
+    background: #fff; color: #333; border: 1px solid #bbb;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
 
   /* 表情符號托盤與貼紙 */
   #tray {
@@ -62,7 +81,7 @@
     background: var(--panel); border-bottom: 1px solid var(--line);
   }
   .tray-emoji { font-size: 24px; cursor: grab; user-select: none; touch-action: none; }
-  #stickers { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  #stickers { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
   .sticker {
     position: absolute; font-size: 44px; cursor: grab; user-select: none;
     transform: translate(-50%, -50%); pointer-events: auto; touch-action: none;
@@ -122,8 +141,16 @@
         <div class="label">圖形顯示（拖曳下方表情符號到畫面上，雙擊可刪除）</div>
         <div id="tray"></div>
         <div id="graphBox">
-          <div id="graph"></div>
-          <div id="stickers"></div>
+          <div id="world">
+            <div id="graph"></div>
+            <div id="stickers"></div>
+          </div>
+          <canvas id="gridCv"></canvas>
+          <div id="viewBtns">
+            <button id="zoomIn" title="放大">＋</button>
+            <button id="zoomOut" title="縮小">－</button>
+            <button id="homeBtn" title="回到原點">⌂</button>
+          </div>
         </div>
       </div>
       <div class="hsplit" id="hsplit" title="上下拖曳調整高度"></div>
@@ -233,8 +260,8 @@ async function runCode() {
   });
   Sk.TurtleGraphics = {
     target: 'graph',
-    width: graph.clientWidth,
-    height: graph.clientHeight
+    width: WORLD,
+    height: WORLD
   };
 
   try {
@@ -328,7 +355,7 @@ $('examples').onchange = e => {
 };
 
 /* ---------- 6. 表情符號：從托盤拖到畫面，貼紙可再拖動、雙擊刪除 ---------- */
-const EMOJIS = ['🎃', '👻', '🦇', '🕷️', '💀', '🍬', '🕸️', '🌙', '😱', '🧙'];
+const EMOJIS = ['', '🤙', '☝️', '🤌', '👁️', '👄', '👅', '👃', '🫵', '✌️','💪'];
 const box = $('graphBox'), layer = $('stickers');
 
 EMOJIS.forEach(ch => {
@@ -355,7 +382,8 @@ function dragNew(ch, e) {
     document.body.classList.remove('dragging');
     const r = box.getBoundingClientRect();
     if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-      addSticker(ch, ev.clientX - r.left, ev.clientY - r.top);
+      const p = toWorld(ev.clientX, ev.clientY);
+      addSticker(ch, p.x, p.y);
     }
   };
   window.addEventListener('pointermove', place);
@@ -371,11 +399,12 @@ function addSticker(ch, x, y) {
   s.addEventListener('dblclick', () => s.remove());
   s.addEventListener('pointerdown', e => {
     e.preventDefault();
+    e.stopPropagation();          // 不要讓畫布跟著被拖走
     document.body.classList.add('dragging');
     const move = ev => {
-      const r = box.getBoundingClientRect();
-      s.style.left = Math.max(0, Math.min(ev.clientX - r.left, r.width)) + 'px';
-      s.style.top = Math.max(0, Math.min(ev.clientY - r.top, r.height)) + 'px';
+      const p = toWorld(ev.clientX, ev.clientY);
+      s.style.left = p.x + 'px';
+      s.style.top = p.y + 'px';
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
@@ -387,6 +416,150 @@ function addSticker(ch, x, y) {
   });
   layer.appendChild(s);
 }
+
+/* ---------- 7. 無限畫布：拖曳平移、滾輪縮放、格線（像 Desmos） ---------- */
+const WORLD = 2400;            // 海龜畫布大小：原點在中心，上下左右各約 1200 格
+const K_MIN = 0.1, K_MAX = 8; // 縮放範圍
+const world = $('world'), gridCv = $('gridCv');
+graph.style.width = WORLD + 'px';
+graph.style.height = WORLD + 'px';
+graph.style.left = (-WORLD / 2) + 'px';
+graph.style.top = (-WORLD / 2) + 'px';
+
+const view = { x: 0, y: 0, k: 1 };   // x,y：原點在畫面上的位置；k：縮放倍率
+
+function applyView() {
+  world.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.k + ')';
+  drawGrid();
+}
+function resetView() {
+  view.x = box.clientWidth / 2;
+  view.y = box.clientHeight / 2;
+  view.k = 1;
+  applyView();
+}
+// 螢幕座標 → 世界座標（貼紙用）
+function toWorld(cx, cy) {
+  const r = box.getBoundingClientRect();
+  return { x: (cx - r.left - view.x) / view.k, y: (cy - r.top - view.y) / view.k };
+}
+function zoomAt(cx, cy, factor) {
+  const r = box.getBoundingClientRect();
+  const px = cx - r.left, py = cy - r.top;
+  const nk = Math.max(K_MIN, Math.min(K_MAX, view.k * factor));
+  const f = nk / view.k;
+  view.x = px - (px - view.x) * f;      // 以滑鼠位置為中心縮放
+  view.y = py - (py - view.y) * f;
+  view.k = nk;
+  applyView();
+}
+
+// 滾輪縮放
+box.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+}, { passive: false });
+
+// 拖曳平移
+box.addEventListener('pointerdown', e => {
+  if (e.target.closest('#viewBtns')) return;
+  e.preventDefault();
+  box.setPointerCapture(e.pointerId);
+  box.classList.add('panning');
+  let lx = e.clientX, ly = e.clientY;
+  const move = ev => {
+    view.x += ev.clientX - lx;
+    view.y += ev.clientY - ly;
+    lx = ev.clientX; ly = ev.clientY;
+    applyView();
+  };
+  const up = () => {
+    box.classList.remove('panning');
+    box.removeEventListener('pointermove', move);
+    box.removeEventListener('pointerup', up);
+    box.removeEventListener('pointercancel', up);
+  };
+  box.addEventListener('pointermove', move);
+  box.addEventListener('pointerup', up);
+  box.addEventListener('pointercancel', up);
+});
+
+// 右上角按鈕
+function boxCenter() {
+  const r = box.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+$('zoomIn').onclick = () => { const c = boxCenter(); zoomAt(c.x, c.y, 1.3); };
+$('zoomOut').onclick = () => { const c = boxCenter(); zoomAt(c.x, c.y, 1 / 1.3); };
+$('homeBtn').onclick = resetView;
+
+// 格線與座標軸（每次平移、縮放都重畫，所以是「無限」的）
+function niceStep(raw) {
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const m = raw / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+}
+function fmt(v) { return String(parseFloat(v.toPrecision(10))); }
+
+function drawGrid() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = box.clientWidth, h = box.clientHeight;
+  if (!w || !h) return;
+  if (gridCv.width !== Math.round(w * dpr) || gridCv.height !== Math.round(h * dpr)) {
+    gridCv.width = Math.round(w * dpr);
+    gridCv.height = Math.round(h * dpr);
+    gridCv.style.width = w + 'px';
+    gridCv.style.height = h + 'px';
+  }
+  const c = gridCv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+
+  const step = niceStep(80 / view.k), minor = step / 5;
+  // 畫面目前看到的「海龜座標」範圍（y 向上為正）
+  const xMin = -view.x / view.k, xMax = (w - view.x) / view.k;
+  const yMax = view.y / view.k, yMin = (view.y - h) / view.k;
+  const sx = x => Math.round(view.x + x * view.k) + 0.5;
+  const sy = y => Math.round(view.y - y * view.k) + 0.5;
+
+  function lines(s, color) {
+    c.strokeStyle = color; c.lineWidth = 1; c.beginPath();
+    for (let i = Math.ceil(xMin / s); i <= Math.floor(xMax / s); i++) { c.moveTo(sx(i * s), 0); c.lineTo(sx(i * s), h); }
+    for (let i = Math.ceil(yMin / s); i <= Math.floor(yMax / s); i++) { c.moveTo(0, sy(i * s)); c.lineTo(w, sy(i * s)); }
+    c.stroke();
+  }
+  lines(minor, 'rgba(0,0,0,0.06)');
+  lines(step, 'rgba(0,0,0,0.18)');
+
+  // 座標軸
+  c.strokeStyle = 'rgba(0,0,0,0.6)'; c.beginPath();
+  if (view.x >= 0 && view.x <= w) { c.moveTo(Math.round(view.x) + 0.5, 0); c.lineTo(Math.round(view.x) + 0.5, h); }
+  if (view.y >= 0 && view.y <= h) { c.moveTo(0, Math.round(view.y) + 0.5); c.lineTo(w, Math.round(view.y) + 0.5); }
+  c.stroke();
+
+  // 數字標籤
+  c.fillStyle = '#555'; c.font = '11px sans-serif';
+  const labelY = Math.min(Math.max(view.y + 13, 12), h - 4);
+  const labelX = Math.min(Math.max(view.x - 5, 24), w - 4);
+  c.textAlign = 'center';
+  for (let i = Math.ceil(xMin / step); i <= Math.floor(xMax / step); i++) {
+    if (i !== 0) c.fillText(fmt(i * step), sx(i * step), labelY);
+  }
+  c.textAlign = 'right';
+  for (let i = Math.ceil(yMin / step); i <= Math.floor(yMax / step); i++) {
+    if (i !== 0) c.fillText(fmt(i * step), labelX, sy(i * step) + 4);
+  }
+  if (view.x >= 0 && view.x <= w && view.y >= 0 && view.y <= h) {
+    c.textAlign = 'right'; c.fillText('0', view.x - 5, view.y + 13);
+  }
+}
+
+// 畫面大小改變（拖曳分隔線、視窗縮放）時重畫格線
+let viewInit = false;
+new ResizeObserver(() => {
+  if (!viewInit && box.clientWidth) { viewInit = true; resetView(); }
+  else applyView();
+}).observe(box);
 
 // 上下：調整「圖形顯示」高度
 makeDraggable($('hsplit'), ev => {
