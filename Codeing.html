@@ -1,126 +1,21 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Python 小畫家</title>
 
 <!-- ============================================================
-  Codeing.html 檔案結構（用搜尋 "【區塊】" 可以快速跳到各區）
-  1. 【區塊】樣式 CSS
-  2. 【區塊】版面 HTML：左＝圖形顯示(上)+文字輸出(下)，右＝Python 編輯區
-  3. 【區塊】程式 JS：載入 Skulpt → 執行 Python → 拖曳調整寬度
+  這個專案由三個檔案組成，必須放在「同一個資料夾」：
+    Codeing.html  版面骨架（這個檔案）
+    Codeing.css   外觀、顏色、深淺色主題
+    Codeing.js    所有功能（執行 Python、無限畫布、貼紙、顏色按鈕…）
 ============================================================ -->
-
-<!-- ===================== 【區塊】樣式 CSS ===================== -->
-<style>
-  :root {
-    --bg: #1e1e2e; --panel: #282a3a; --line: #44475a;
-    --text: #f2f2f2; --accent: #ff8c1a; --err: #ff6b6b; --ok: #50fa7b;
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
-  body {
-    background: var(--bg); color: var(--text);
-    font-family: -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif;
-    display: flex; flex-direction: column;
-  }
-
-  /* 上方標題列 */
-  header {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
-  }
-  header h1 { font-size: 18px; margin: 0; flex: 1; }
-  #status { font-size: 13px; opacity: .8; }
-  button {
-    font-size: 15px; padding: 6px 16px; border: 0; border-radius: 6px;
-    cursor: pointer; font-weight: 600;
-  }
-  #runBtn { background: var(--accent); color: #fff; }
-  #runBtn:disabled { opacity: .4; cursor: not-allowed; }
-  #stopBtn, #clearBtn { background: var(--line); color: var(--text); }
-
-  /* 主要區域：左右分區 */
-  #main { flex: 1; display: flex; min-height: 0; }
-
-  /* 左半部（初始佔 1/3） */
-  #left { width: 33.333%; min-width: 160px; display: flex; flex-direction: column; min-height: 0; }
-  #graphWrap { flex: 0 0 55%; min-height: 80px; display: flex; flex-direction: column; }
-  #outWrap   { flex: 1; min-height: 60px; display: flex; flex-direction: column; }
-  .label {
-    font-size: 12px; padding: 4px 10px; background: var(--panel);
-    border-bottom: 1px solid var(--line); opacity: .9;
-  }
-  /* 圖形顯示區（海龜畫布會放在這裡） */
-  #graphBox {
-    flex: 1; background: #fff; overflow: hidden; position: relative;
-    cursor: grab; touch-action: none;
-  }
-  #graphBox.panning { cursor: grabbing; }
-  /* 世界層：平移與縮放都作用在這一層，海龜畫布與貼紙都放在裡面 */
-  #world {
-    position: absolute; left: 0; top: 0; width: 0; height: 0;
-    transform-origin: 0 0; will-change: transform;
-  }
-  #graph { position: absolute; }   /* 大小與位置由 JS 設定 */
-  #gridCv { position: absolute; left: 0; top: 0; pointer-events: none; }
-  #viewBtns {
-    position: absolute; right: 8px; top: 8px; z-index: 5;
-    display: flex; flex-direction: column; gap: 4px;
-  }
-  #viewBtns button {
-    width: 30px; height: 30px; padding: 0; font-size: 18px; line-height: 1;
-    background: #fff; color: #333; border: 1px solid #bbb;
-    box-shadow: 0 1px 3px rgba(0,0,0,.2);
-  }
-
-  /* 表情符號托盤與貼紙 */
-  #tray {
-    display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px;
-    background: var(--panel); border-bottom: 1px solid var(--line);
-  }
-  .tray-emoji { font-size: 24px; cursor: grab; user-select: none; touch-action: none; }
-  #stickers { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
-  .sticker {
-    position: absolute; font-size: 44px; cursor: grab; user-select: none;
-    transform: translate(-50%, -50%); pointer-events: auto; touch-action: none;
-  }
-  .ghost {
-    position: fixed; font-size: 44px; pointer-events: none; z-index: 99;
-    transform: translate(-50%, -50%);
-  }
-  #examples {
-    font-size: 14px; padding: 5px 8px; border-radius: 6px;
-    background: var(--line); color: var(--text); border: 0;
-  }
-  /* 文字輸出區（print 的結果與錯誤訊息） */
-  #out {
-    flex: 1; margin: 0; padding: 8px 10px; overflow: auto;
-    font-family: Menlo, Consolas, monospace; font-size: 14px;
-    white-space: pre-wrap; background: #11111b;
-  }
-  #out .err { color: var(--err); }
-
-  /* 右半部（Python 編輯區，初始佔 2/3） */
-  #right { flex: 1; min-width: 240px; display: flex; flex-direction: column; min-height: 0; }
-  #code {
-    flex: 1; width: 100%; resize: none; border: 0; outline: 0; padding: 12px;
-    background: #11111b; color: var(--text);
-    font-family: Menlo, Consolas, monospace; font-size: 16px; line-height: 1.5;
-    tab-size: 4;
-  }
-
-  /* 可拖曳的分隔線 */
-  .vsplit { width: 6px; background: var(--line); cursor: col-resize; flex: 0 0 6px; }
-  .hsplit { height: 6px; background: var(--line); cursor: row-resize; flex: 0 0 6px; }
-  .vsplit:hover, .hsplit:hover { background: var(--accent); }
-  body.dragging { user-select: none; }
-</style>
+<link rel="stylesheet" href="Codeing.css">
 </head>
 
-<!-- ===================== 【區塊】版面 HTML ===================== -->
 <body>
+  <!-- ===================== 【區塊】標題列 ===================== -->
   <header>
     <h1>🎃 Python 小畫家</h1>
     <select id="examples" title="載入範例程式">
@@ -129,23 +24,22 @@
       <option value="pumpkin">多瓣南瓜（迴圈）</option>
     </select>
     <span id="status">載入 Python 中…</span>
+    <button id="themeBtn" title="切換淺色／深色">🌙 深色</button>
     <button id="runBtn" disabled>▶ 執行 (Ctrl+Enter)</button>
     <button id="stopBtn">■ 停止</button>
     <button id="clearBtn">清除</button>
   </header>
 
   <div id="main">
-    <!-- 左半部：圖形顯示（上）＋ 文字輸出（下） -->
+    <!-- ===================== 【區塊】左半部：圖形顯示（上）＋ 文字輸出（下） ===================== -->
     <section id="left">
       <div id="graphWrap">
         <div class="label">圖形顯示（拖曳下方表情符號到畫面上，雙擊可刪除）</div>
         <div id="tray"></div>
         <div id="graphBox">
-          <div id="world">
-            <div id="graph"></div>
-            <div id="stickers"></div>
-          </div>
+          <div id="world"><div id="graph"></div></div>
           <canvas id="gridCv"></canvas>
+          <div id="stickers"></div>
           <div id="viewBtns">
             <button id="zoomIn" title="放大">＋</button>
             <button id="zoomOut" title="縮小">－</button>
@@ -162,9 +56,18 @@
 
     <div class="vsplit" id="vsplit" title="左右拖曳調整寬度"></div>
 
-    <!-- 右半部：Python 程式碼 -->
+    <!-- ===================== 【區塊】右半部：顏色按鈕 + Python 程式碼 ===================== -->
     <section id="right">
       <div class="label">Python 程式碼</div>
+      <div id="palette">
+        <div class="pal-row" id="lineColors">
+          <span class="pal-title">✏️ 線條顏色</span>
+        </div>
+        <div class="pal-row" id="fillColors">
+          <span class="pal-title">🪣 填色</span>
+        </div>
+      </div>
+      <div id="editorHost">
 <textarea id="code" spellcheck="false">import turtle
 
 t = turtle.Turtle()
@@ -178,395 +81,11 @@ for i in range(4):
 
 print("畫好囉！")
 </textarea>
+      </div>
     </section>
   </div>
 
-<!-- ===================== 【區塊】程式 JS ===================== -->
-<script>
-const $ = id => document.getElementById(id);
-const out = $('out'), graph = $('graph'), codeBox = $('code');
-const runBtn = $('runBtn'), statusEl = $('status');
-let skulptReady = false, running = false;
-
-/* ---------- 1. 載入 Skulpt（瀏覽器裡的 Python）---------- */
-function loadScript(urls) {
-  return new Promise((resolve, reject) => {
-    let i = 0;
-    (function next() {
-      if (i >= urls.length) return reject(new Error('載入失敗'));
-      const s = document.createElement('script');
-      s.src = urls[i++];
-      s.onload = resolve;
-      s.onerror = () => { s.remove(); next(); };
-      document.head.appendChild(s);
-    })();
-  });
-}
-
-(async function init() {
-  try {
-    await loadScript([
-      'https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/skulpt/1.2.0/skulpt.min.js'
-    ]);
-    await loadScript([
-      'https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/skulpt/1.2.0/skulpt-stdlib.js'
-    ]);
-    skulptReady = true;
-    runBtn.disabled = false;
-    statusEl.textContent = '✅ 準備好了';
-  } catch (e) {
-    statusEl.textContent = '❌ Python 載入失敗';
-    addOut('無法載入 Python 引擎，請確認電腦有連上網路後重新整理頁面。\n', true);
-  }
-})();
-
-/* ---------- 2. 輸出與執行 ---------- */
-function addOut(text, isErr) {
-  if (isErr) {
-    const span = document.createElement('span');
-    span.className = 'err';
-    span.textContent = text;
-    out.appendChild(span);
-  } else {
-    out.appendChild(document.createTextNode(text));
-  }
-  out.scrollTop = out.scrollHeight;
-}
-
-function builtinRead(x) {
-  if (Sk.builtinFiles === undefined || Sk.builtinFiles['files'][x] === undefined)
-    throw "File not found: '" + x + "'";
-  return Sk.builtinFiles['files'][x];
-}
-
-async function runCode() {
-  if (!skulptReady || running) return;
-  running = true;
-  runBtn.disabled = true;
-  statusEl.textContent = '執行中…';
-  out.textContent = '';
-  graph.innerHTML = '';                       // 清掉上一次的圖
-
-  Sk.configure({
-    output: t => addOut(t, false),
-    read: builtinRead,
-    __future__: Sk.python3,
-    inputfun: p => { const v = prompt(p || ''); return v === null ? '' : v; },
-    inputfunTakesPrompt: true,
-    yieldLimit: 100,                          // 讓畫面可以即時更新、也能按「停止」
-    execLimit: Number.POSITIVE_INFINITY
-  });
-  Sk.TurtleGraphics = {
-    target: 'graph',
-    width: WORLD,
-    height: WORLD
-  };
-
-  try {
-    await Sk.misceval.asyncToPromise(() =>
-      Sk.importMainWithBody('<stdin>', false, codeBox.value, true));
-  } catch (e) {
-    if (e.toString().includes('TimeLimitError')) {
-      addOut('\n⏹ 已停止執行\n', true);       // 按「停止」時顯示的友善訊息
-    } else {
-      addOut('\n' + e.toString() + '\n', true);
-    }
-  }
-  running = false;
-  runBtn.disabled = false;
-  statusEl.textContent = '✅ 準備好了';
-}
-
-runBtn.onclick = runCode;
-$('stopBtn').onclick = () => { if (running && window.Sk) Sk.execLimit = 1; };
-$('clearBtn').onclick = () => { out.textContent = ''; graph.innerHTML = ''; $('stickers').innerHTML = ''; };
-
-/* ---------- 3. 編輯器小功能：Tab 縮排、Ctrl/Cmd+Enter 執行 ---------- */
-codeBox.addEventListener('keydown', e => {
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const s = codeBox.selectionStart, en = codeBox.selectionEnd;
-    codeBox.value = codeBox.value.slice(0, s) + '    ' + codeBox.value.slice(en);
-    codeBox.selectionStart = codeBox.selectionEnd = s + 4;
-  } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-    e.preventDefault();
-    runCode();
-  }
-});
-
-/* ---------- 4. 拖曳調整分區大小 ---------- */
-function makeDraggable(handle, onMove) {
-  handle.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    document.body.classList.add('dragging');
-    handle.setPointerCapture(e.pointerId);
-    const move = ev => onMove(ev);
-    const up = () => {
-      document.body.classList.remove('dragging');
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', up);
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up);
-  });
-}
-// 左右：調整「左半部」寬度
-makeDraggable($('vsplit'), ev => {
-  const w = ev.clientX - $('main').getBoundingClientRect().left;
-  const max = $('main').clientWidth - 246;
-  $('left').style.width = Math.max(160, Math.min(w, max)) + 'px';
-});
-/* ---------- 5. 範例選單 ---------- */
-const EXAMPLES = {
-  square: `import turtle
-
-t = turtle.Turtle()
-t.color("orange")      # 改改看：red、blue、green、purple…
-t.pensize(3)
-
-# 用迴圈畫一個正方形
-for i in range(4):
-    t.forward(100)
-    t.left(90)
-
-print("畫好囉！")
-`,
-  pumpkin: `import turtle
-
-t = turtle.Turtle()
-t.speed(6)
-t.pensize(2)
-t.color("orange")
-
-petals = 8          # 南瓜的瓣數：改成 6、10、12 看看
-
-for i in range(petals):
-    t.circle(60)
-    t.left(360 / petals)
-
-print("南瓜有", petals, "瓣")
-`
-};
-$('examples').onchange = e => {
-  if (EXAMPLES[e.target.value]) codeBox.value = EXAMPLES[e.target.value];
-  e.target.value = '';
-};
-
-/* ---------- 6. 表情符號：從托盤拖到畫面，貼紙可再拖動、雙擊刪除 ---------- */
-const EMOJIS = ['', '🤙', '☝️', '🤌', '👁️', '👄', '👅', '👃', '🫵', '✌️','💪'];
-const box = $('graphBox'), layer = $('stickers');
-
-EMOJIS.forEach(ch => {
-  const s = document.createElement('span');
-  s.className = 'tray-emoji';
-  s.textContent = ch;
-  s.addEventListener('pointerdown', e => dragNew(ch, e));
-  $('tray').appendChild(s);
-});
-
-function dragNew(ch, e) {
-  e.preventDefault();
-  const ghost = document.createElement('span');
-  ghost.className = 'ghost';
-  ghost.textContent = ch;
-  document.body.appendChild(ghost);
-  document.body.classList.add('dragging');
-  const place = ev => { ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; };
-  place(e);
-  const up = ev => {
-    window.removeEventListener('pointermove', place);
-    window.removeEventListener('pointerup', up);
-    ghost.remove();
-    document.body.classList.remove('dragging');
-    const r = box.getBoundingClientRect();
-    if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-      const p = toWorld(ev.clientX, ev.clientY);
-      addSticker(ch, p.x, p.y);
-    }
-  };
-  window.addEventListener('pointermove', place);
-  window.addEventListener('pointerup', up);
-}
-
-function addSticker(ch, x, y) {
-  const s = document.createElement('span');
-  s.className = 'sticker';
-  s.textContent = ch;
-  s.style.left = x + 'px';
-  s.style.top = y + 'px';
-  s.addEventListener('dblclick', () => s.remove());
-  s.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    e.stopPropagation();          // 不要讓畫布跟著被拖走
-    document.body.classList.add('dragging');
-    const move = ev => {
-      const p = toWorld(ev.clientX, ev.clientY);
-      s.style.left = p.x + 'px';
-      s.style.top = p.y + 'px';
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      document.body.classList.remove('dragging');
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  });
-  layer.appendChild(s);
-}
-
-/* ---------- 7. 無限畫布：拖曳平移、滾輪縮放、格線（像 Desmos） ---------- */
-const WORLD = 2400;            // 海龜畫布大小：原點在中心，上下左右各約 1200 格
-const K_MIN = 0.1, K_MAX = 8; // 縮放範圍
-const world = $('world'), gridCv = $('gridCv');
-graph.style.width = WORLD + 'px';
-graph.style.height = WORLD + 'px';
-graph.style.left = (-WORLD / 2) + 'px';
-graph.style.top = (-WORLD / 2) + 'px';
-
-const view = { x: 0, y: 0, k: 1 };   // x,y：原點在畫面上的位置；k：縮放倍率
-
-function applyView() {
-  world.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.k + ')';
-  drawGrid();
-}
-function resetView() {
-  view.x = box.clientWidth / 2;
-  view.y = box.clientHeight / 2;
-  view.k = 1;
-  applyView();
-}
-// 螢幕座標 → 世界座標（貼紙用）
-function toWorld(cx, cy) {
-  const r = box.getBoundingClientRect();
-  return { x: (cx - r.left - view.x) / view.k, y: (cy - r.top - view.y) / view.k };
-}
-function zoomAt(cx, cy, factor) {
-  const r = box.getBoundingClientRect();
-  const px = cx - r.left, py = cy - r.top;
-  const nk = Math.max(K_MIN, Math.min(K_MAX, view.k * factor));
-  const f = nk / view.k;
-  view.x = px - (px - view.x) * f;      // 以滑鼠位置為中心縮放
-  view.y = py - (py - view.y) * f;
-  view.k = nk;
-  applyView();
-}
-
-// 滾輪縮放
-box.addEventListener('wheel', e => {
-  e.preventDefault();
-  zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
-}, { passive: false });
-
-// 拖曳平移
-box.addEventListener('pointerdown', e => {
-  if (e.target.closest('#viewBtns')) return;
-  e.preventDefault();
-  box.setPointerCapture(e.pointerId);
-  box.classList.add('panning');
-  let lx = e.clientX, ly = e.clientY;
-  const move = ev => {
-    view.x += ev.clientX - lx;
-    view.y += ev.clientY - ly;
-    lx = ev.clientX; ly = ev.clientY;
-    applyView();
-  };
-  const up = () => {
-    box.classList.remove('panning');
-    box.removeEventListener('pointermove', move);
-    box.removeEventListener('pointerup', up);
-    box.removeEventListener('pointercancel', up);
-  };
-  box.addEventListener('pointermove', move);
-  box.addEventListener('pointerup', up);
-  box.addEventListener('pointercancel', up);
-});
-
-// 右上角按鈕
-function boxCenter() {
-  const r = box.getBoundingClientRect();
-  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-}
-$('zoomIn').onclick = () => { const c = boxCenter(); zoomAt(c.x, c.y, 1.3); };
-$('zoomOut').onclick = () => { const c = boxCenter(); zoomAt(c.x, c.y, 1 / 1.3); };
-$('homeBtn').onclick = resetView;
-
-// 格線與座標軸（每次平移、縮放都重畫，所以是「無限」的）
-function niceStep(raw) {
-  const p = Math.pow(10, Math.floor(Math.log10(raw)));
-  const m = raw / p;
-  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
-}
-function fmt(v) { return String(parseFloat(v.toPrecision(10))); }
-
-function drawGrid() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = box.clientWidth, h = box.clientHeight;
-  if (!w || !h) return;
-  if (gridCv.width !== Math.round(w * dpr) || gridCv.height !== Math.round(h * dpr)) {
-    gridCv.width = Math.round(w * dpr);
-    gridCv.height = Math.round(h * dpr);
-    gridCv.style.width = w + 'px';
-    gridCv.style.height = h + 'px';
-  }
-  const c = gridCv.getContext('2d');
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  c.clearRect(0, 0, w, h);
-
-  const step = niceStep(80 / view.k), minor = step / 5;
-  // 畫面目前看到的「海龜座標」範圍（y 向上為正）
-  const xMin = -view.x / view.k, xMax = (w - view.x) / view.k;
-  const yMax = view.y / view.k, yMin = (view.y - h) / view.k;
-  const sx = x => Math.round(view.x + x * view.k) + 0.5;
-  const sy = y => Math.round(view.y - y * view.k) + 0.5;
-
-  function lines(s, color) {
-    c.strokeStyle = color; c.lineWidth = 1; c.beginPath();
-    for (let i = Math.ceil(xMin / s); i <= Math.floor(xMax / s); i++) { c.moveTo(sx(i * s), 0); c.lineTo(sx(i * s), h); }
-    for (let i = Math.ceil(yMin / s); i <= Math.floor(yMax / s); i++) { c.moveTo(0, sy(i * s)); c.lineTo(w, sy(i * s)); }
-    c.stroke();
-  }
-  lines(minor, 'rgba(0,0,0,0.06)');
-  lines(step, 'rgba(0,0,0,0.18)');
-
-  // 座標軸
-  c.strokeStyle = 'rgba(0,0,0,0.6)'; c.beginPath();
-  if (view.x >= 0 && view.x <= w) { c.moveTo(Math.round(view.x) + 0.5, 0); c.lineTo(Math.round(view.x) + 0.5, h); }
-  if (view.y >= 0 && view.y <= h) { c.moveTo(0, Math.round(view.y) + 0.5); c.lineTo(w, Math.round(view.y) + 0.5); }
-  c.stroke();
-
-  // 數字標籤
-  c.fillStyle = '#555'; c.font = '11px sans-serif';
-  const labelY = Math.min(Math.max(view.y + 13, 12), h - 4);
-  const labelX = Math.min(Math.max(view.x - 5, 24), w - 4);
-  c.textAlign = 'center';
-  for (let i = Math.ceil(xMin / step); i <= Math.floor(xMax / step); i++) {
-    if (i !== 0) c.fillText(fmt(i * step), sx(i * step), labelY);
-  }
-  c.textAlign = 'right';
-  for (let i = Math.ceil(yMin / step); i <= Math.floor(yMax / step); i++) {
-    if (i !== 0) c.fillText(fmt(i * step), labelX, sy(i * step) + 4);
-  }
-  if (view.x >= 0 && view.x <= w && view.y >= 0 && view.y <= h) {
-    c.textAlign = 'right'; c.fillText('0', view.x - 5, view.y + 13);
-  }
-}
-
-// 畫面大小改變（拖曳分隔線、視窗縮放）時重畫格線
-let viewInit = false;
-new ResizeObserver(() => {
-  if (!viewInit && box.clientWidth) { viewInit = true; resetView(); }
-  else applyView();
-}).observe(box);
-
-// 上下：調整「圖形顯示」高度
-makeDraggable($('hsplit'), ev => {
-  const box = $('left').getBoundingClientRect();
-  const h = ev.clientY - box.top;
-  $('graphWrap').style.flex = '0 0 ' + Math.max(80, Math.min(h, box.height - 66)) + 'px';
-});
-</script>
+<script src="Codeing.js"></script>
 </body>
 </html>
+

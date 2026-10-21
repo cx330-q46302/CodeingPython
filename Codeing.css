@@ -1,0 +1,219 @@
+/* ============================================================
+   Codeing.css —— 外觀與版面
+   目錄（搜尋 【區塊】 可快速跳轉）
+   1. 【區塊】主題顏色（淺色預設／深色）
+   2. 【區塊】基本與標題列
+   3. 【區塊】左半部：圖形顯示、無限畫布、表情貼紙、輸出
+   4. 【區塊】右半部：顏色按鈕、程式碼編輯器（CodeMirror）
+   5. 【區塊】分隔線
+============================================================ */
+
+/* ===================== 【區塊】主題顏色 ===================== */
+/* 預設＝淺色（VS Code Light+）。<html data-theme="dark"> 時換成深色（VS Code Dark+） */
+:root,
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --panel: #f3f3f3;
+  --line: #d4d4d4;
+  --text: #1f1f1f;
+  --btn-bg: #e4e4e4;
+  --accent: #d35400;
+  --out-bg: #ffffff;
+  --err: #cd3131;
+
+  --cm-bg: #ffffff;
+  --cm-fg: #000000;
+  --cm-gutter-bg: #ffffff;
+  --cm-gutter-fg: #237893;
+  --cm-cursor: #000000;
+  --cm-sel: #add6ff;
+  --cm-keyword: #af00db;
+  --cm-def: #795e26;
+  --cm-builtin: #795e26;
+  --cm-string: #a31515;
+  --cm-comment: #008000;
+  --cm-number: #098658;
+  --cm-atom: #0000ff;
+  --cm-var: #001080;
+  --cm-op: #000000;
+}
+:root[data-theme="dark"] {
+  --bg: #1e1e1e;
+  --panel: #252526;
+  --line: #3c3c3c;
+  --text: #cccccc;
+  --btn-bg: #3a3d41;
+  --accent: #e8710a;
+  --out-bg: #1e1e1e;
+  --err: #f48771;
+
+  --cm-bg: #1e1e1e;
+  --cm-fg: #d4d4d4;
+  --cm-gutter-bg: #1e1e1e;
+  --cm-gutter-fg: #858585;
+  --cm-cursor: #aeafad;
+  --cm-sel: #264f78;
+  --cm-keyword: #c586c0;
+  --cm-def: #dcdcaa;
+  --cm-builtin: #dcdcaa;
+  --cm-string: #ce9178;
+  --cm-comment: #6a9955;
+  --cm-number: #b5cea8;
+  --cm-atom: #569cd6;
+  --cm-var: #9cdcfe;
+  --cm-op: #d4d4d4;
+}
+
+/* ===================== 【區塊】基本與標題列 ===================== */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif;
+  display: flex; flex-direction: column;
+}
+header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+header h1 { font-size: 18px; margin: 0; flex: 1; }
+#status { font-size: 13px; opacity: .8; }
+button {
+  font-size: 15px; padding: 6px 16px; border: 0; border-radius: 6px;
+  cursor: pointer; font-weight: 600;
+  background: var(--btn-bg); color: var(--text);
+}
+#runBtn { background: var(--accent); color: #fff; }
+#runBtn:disabled { opacity: .4; cursor: not-allowed; }
+#examples {
+  font-size: 14px; padding: 5px 8px; border-radius: 6px;
+  background: var(--btn-bg); color: var(--text); border: 0;
+}
+.label {
+  font-size: 12px; padding: 4px 10px; background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+/* 主要區域：左右分區 */
+#main { flex: 1; display: flex; min-height: 0; }
+
+/* ===================== 【區塊】左半部 ===================== */
+#left { width: 33.333%; min-width: 160px; display: flex; flex-direction: column; min-height: 0; }
+#graphWrap { flex: 0 0 55%; min-height: 80px; display: flex; flex-direction: column; }
+#outWrap   { flex: 1; min-height: 60px; display: flex; flex-direction: column; }
+
+/* 圖形顯示區。畫布一律白底（像方格紙），深色模式也一樣 */
+#graphBox {
+  flex: 1; background: #fff; overflow: hidden; position: relative;
+  cursor: grab; touch-action: none;
+}
+#graphBox.panning { cursor: grabbing; }
+
+/* 圖層順序（由下到上）：海龜圖形 → 格線 → 表情貼紙 → 右上角按鈕 */
+#world {            /* 海龜畫布：平移、縮放都作用在這一層 */
+  position: absolute; left: 0; top: 0; width: 0; height: 0;
+  transform-origin: 0 0; will-change: transform; z-index: 1;
+}
+#graph { position: absolute; }   /* 大小與位置由 JS 設定 */
+#gridCv { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; }
+#stickers {         /* 貼紙層：與 #world 使用同一組平移、縮放 */
+  position: absolute; left: 0; top: 0; width: 0; height: 0;
+  transform-origin: 0 0; pointer-events: none; z-index: 3;
+}
+#viewBtns {
+  position: absolute; right: 8px; top: 8px; z-index: 5;
+  display: flex; flex-direction: column; gap: 4px;
+}
+#viewBtns button {
+  width: 30px; height: 30px; padding: 0; font-size: 18px; line-height: 1;
+  background: #fff; color: #333; border: 1px solid #bbb;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+
+/* 表情符號托盤與貼紙 */
+#tray {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.tray-emoji { font-size: 24px; cursor: grab; user-select: none; touch-action: none; }
+.sticker {
+  position: absolute; font-size: 44px; cursor: grab; user-select: none;
+  transform: translate(-50%, -50%); pointer-events: auto; touch-action: none;
+}
+.ghost {
+  position: fixed; font-size: 44px; pointer-events: none; z-index: 99;
+  transform: translate(-50%, -50%);
+}
+
+/* 文字輸出區（print 的結果與錯誤訊息） */
+#out {
+  flex: 1; margin: 0; padding: 8px 10px; overflow: auto;
+  font-family: Menlo, Consolas, monospace; font-size: 14px;
+  white-space: pre-wrap; background: var(--out-bg); color: var(--text);
+}
+#out .err { color: var(--err); }
+
+/* ===================== 【區塊】右半部 ===================== */
+#right { flex: 1; min-width: 240px; display: flex; flex-direction: column; min-height: 0; }
+
+/* 顏色按鈕：點一下，把顏色名稱（含引號）插入到程式碼游標位置 */
+#palette {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.pal-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pal-title { font-size: 12px; font-weight: 600; min-width: 62px; }
+.pal-hint { font-size: 12px; opacity: .65; margin-left: 4px; }
+.sw { width: 24px; height: 24px; padding: 0; border-radius: 0; cursor: pointer; }
+/* 線條顏色：空心圓環 */
+.sw.line {
+  border-radius: 50%; background: transparent; border: 5px solid;
+  box-shadow: 0 0 0 1px var(--line);
+}
+/* 填色：實心方塊 */
+.sw.fill { border-radius: 4px; border: 1px solid var(--line); }
+.sw:hover { transform: scale(1.15); }
+
+/* 程式碼編輯器（CodeMirror 5）。載入失敗時會退回普通文字框 #code */
+#editorHost { flex: 1; min-height: 0; position: relative; }
+#code {
+  position: absolute; inset: 0; width: 100%; height: 100%; resize: none;
+  border: 0; outline: 0; padding: 12px;
+  background: var(--cm-bg); color: var(--cm-fg);
+  font-family: Menlo, Consolas, monospace; font-size: 16px; line-height: 1.5; tab-size: 4;
+}
+#editorHost .CodeMirror {
+  position: absolute; inset: 0; height: auto;
+  background: var(--cm-bg); color: var(--cm-fg);
+  font-family: Menlo, Consolas, monospace; font-size: 16px; line-height: 1.5;
+}
+#editorHost .CodeMirror-gutters { background: var(--cm-gutter-bg); border-right: 1px solid var(--line); }
+#editorHost .CodeMirror-linenumber { color: var(--cm-gutter-fg); padding: 0 10px 0 6px; }
+#editorHost .CodeMirror-cursor { border-left: 2px solid var(--cm-cursor); }
+#editorHost .CodeMirror-selected,
+#editorHost .CodeMirror-focused .CodeMirror-selected { background: var(--cm-sel); }
+#editorHost .CodeMirror-line::selection,
+#editorHost .CodeMirror-line > span::selection,
+#editorHost .CodeMirror-line > span > span::selection { background: var(--cm-sel); }
+
+/* 語法上色（Python） */
+.cm-s-vscode .cm-keyword  { color: var(--cm-keyword); }
+.cm-s-vscode .cm-def      { color: var(--cm-def); }
+.cm-s-vscode .cm-builtin  { color: var(--cm-builtin); }
+.cm-s-vscode .cm-string,
+.cm-s-vscode .cm-string-2 { color: var(--cm-string); }
+.cm-s-vscode .cm-comment  { color: var(--cm-comment); }
+.cm-s-vscode .cm-number   { color: var(--cm-number); }
+.cm-s-vscode .cm-atom     { color: var(--cm-atom); }
+.cm-s-vscode .cm-variable,
+.cm-s-vscode .cm-variable-2,
+.cm-s-vscode .cm-variable-3,
+.cm-s-vscode .cm-property { color: var(--cm-var); }
+.cm-s-vscode .cm-operator { color: var(--cm-op); }
+.cm-s-vscode .cm-meta     { color: var(--cm-def); }
+
+/* ===================== 【區塊】分隔線 ===================== */
+.vsplit { width: 6px; background: var(--line); cursor: col-resize; flex: 0 0 6px; }
+.hsplit { height: 6px; background: var(--line); cursor: row-resize; flex: 0 0 6px; }
+.vsplit:hover, .hsplit:hover { background: var(--accent); }
+body.dragging { user-select: none; }
