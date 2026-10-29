@@ -74,9 +74,9 @@ function loadCss(urls) {
     ]);
     skulptReady = true;
     runBtn.disabled = false;
-    statusEl.textContent = '✅ 準備好了';
+    statusEl.textContent = '準備好了';
   } catch (e) {
-    statusEl.textContent = '❌ Python 載入失敗';
+    statusEl.textContent = 'Python 載入失敗';
     addOut('無法載入 Python 引擎，請確認電腦有連上網路後重新整理頁面。\n', true);
   }
 })();
@@ -196,7 +196,7 @@ async function runCode() {
   }
   running = false;
   runBtn.disabled = false;
-  statusEl.textContent = '✅ 準備好了';
+  statusEl.textContent = '準備好了';
 }
 
 runBtn.onclick = runCode;
@@ -240,7 +240,7 @@ const EXAMPLES = {
   square: `import turtle
 
 t = turtle.Turtle()
-t.color("orange")      # 改改看：red、blue、green、purple…
+t.color("orange")      # 改改看 : red、blue、green、purple…
 t.pensize(3)
 
 # 用迴圈畫一個正方形
@@ -248,7 +248,7 @@ for i in range(4):
     t.forward(100)
     t.left(90)
 
-print("畫好囉！")
+print("畫好了！")
 `,
   pumpkin: `import turtle
 
@@ -349,7 +349,7 @@ $('zoomIn').onclick = () => { const c = boxCenter(); zoomAt(c.x, c.y, 1.3); };
 $('zoomOut').onclick = () => { const c = boxCenter(); zoomAt(c.x, c.y, 1 / 1.3); };
 $('homeBtn').onclick = resetView;
 
-// 格線與座標軸（每次平移、縮放都重畫，所以是「無限」的）
+// 格線與座標軸（每次平移、縮放都重畫，為了做出無限）
 function niceStep(raw) {
   const p = Math.pow(10, Math.floor(Math.log10(raw)));
   const m = raw / p;
@@ -372,7 +372,7 @@ function drawGrid() {
   c.clearRect(0, 0, w, h);
 
   const step = niceStep(80 / view.k), minor = step / 5;
-  // 畫面目前看到的「海龜座標」範圍（y 向上為正）
+  // 畫面目前看到的「海龜座標」範圍（y向上為正）
   const xMin = -view.x / view.k, xMax = (w - view.x) / view.k;
   const yMax = view.y / view.k, yMin = (view.y - h) / view.k;
   const sx = x => Math.round(view.x + x * view.k) + 0.5;

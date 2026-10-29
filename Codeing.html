@@ -5,19 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Python 小畫家</title>
 
-<!-- ============================================================
-  這個專案由三個檔案組成，必須放在「同一個資料夾」：
-    Codeing.html  版面骨架（這個檔案）
-    Codeing.css   外觀、顏色、深淺色主題
-    Codeing.js    所有功能（執行 Python、無限畫布、貼紙、顏色按鈕…）
-============================================================ -->
 <link rel="stylesheet" href="Codeing.css">
 </head>
 
 <body>
   <!-- ===================== 【區塊】標題列 ===================== -->
   <header>
-    <h1>🎃 Python 小畫家</h1>
+    <h1> Python 小畫家</h1>
     <select id="examples" title="載入範例程式">
       <option value="">載入範例…</option>
       <option value="square">正方形（迴圈）</option>
@@ -61,10 +55,10 @@
       <div class="label">Python 程式碼</div>
       <div id="palette">
         <div class="pal-row" id="lineColors">
-          <span class="pal-title">✏️ 線條顏色</span>
+          <span class="pal-title"> 線條顏色</span>
         </div>
         <div class="pal-row" id="fillColors">
-          <span class="pal-title">🪣 填色</span>
+          <span class="pal-title"> 填色</span>
         </div>
       </div>
       <div id="editorHost">
@@ -74,12 +68,12 @@ t = turtle.Turtle()
 t.color("orange")      # 改改看：red、blue、green、purple…
 t.pensize(3)
 
-# 用迴圈畫一個正方形
+# 用迴圈畫一個正方形 :D
 for i in range(4):
     t.forward(100)
     t.left(90)
 
-print("畫好囉！")
+print("畫好了！")
 </textarea>
       </div>
     </section>
