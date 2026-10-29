@@ -382,7 +382,8 @@ new ResizeObserver(() => {
 }).observe(box);
 
 /* ===================== 【區塊】6. 表情貼紙 ===================== */
-// 從托盤拖到畫面；貼紙在最上層，可再拖動、雙擊刪除
+// 從托盤拖到畫面；貼紙在最上層。
+// 操作：拖曳 = 移動｜滾輪 = 放大縮小｜點選後拖曳上方藍色圓點 = 360 度旋轉｜雙擊 = 刪除
 const EMOJIS = ['', '🤙', '☝️', '🤌', '👁️', '👄', '👅', '👃', '🫵', '✌️', '💪'].filter(Boolean);
 
 EMOJIS.forEach(ch => {
@@ -417,16 +418,57 @@ function dragNew(ch, e) {
   window.addEventListener('pointerup', up);
 }
 
+let selectedSticker = null;           // 目前被選取的貼紙（會顯示虛線框和旋轉把手）
+function selectSticker(s) {
+  if (selectedSticker && selectedSticker !== s) selectedSticker.classList.remove('selected');
+  selectedSticker = s;
+  if (s) s.classList.add('selected');
+}
+// 點到畫布空白處，取消選取（點到貼紙時不會觸發，因為貼紙的 pointerdown 會擋下事件）
+box.addEventListener('pointerdown', e => {
+  if (!e.target.closest('.sticker')) selectSticker(null);
+});
+
 function addSticker(ch, x, y) {
+  // 貼紙 = 外層 s（負責位置、旋轉、大小）+ 裡面的表情符號 glyph + 旋轉把手 handle
   const s = document.createElement('span');
   s.className = 'sticker';
-  s.textContent = ch;
+  s.title = '拖曳移動｜滾輪放大縮小｜點選後拖藍點旋轉｜雙擊刪除';
+  const glyph = document.createElement('span');
+  glyph.textContent = ch;
+  const handle = document.createElement('span');
+  handle.className = 'rot-handle';
+  s.appendChild(glyph);
+  s.appendChild(handle);
   s.style.left = x + 'px';
   s.style.top = y + 'px';
+
+  let scale = 1;      // 大小倍率
+  let rot = 0;        // 旋轉角度（度）
+  function update() {
+    s.style.transform = 'translate(-50%, -50%) rotate(' + rot + 'deg) scale(' + scale + ')';
+    // 框線和把手不要跟著貼紙一起變大變小，用 1/scale 抵消
+    s.style.outlineWidth = (2 / scale) + 'px';
+    s.style.outlineOffset = (4 / scale) + 'px';
+    handle.style.transform = 'translate(-50%, -50%) scale(' + (1 / scale) + ')';
+  }
+  update();
+
   s.addEventListener('dblclick', () => s.remove());
+
+  // 滾輪：放大縮小這個貼紙（擋下事件，不要讓畫布一起縮放）
+  s.addEventListener('wheel', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    scale = Math.max(0.25, Math.min(8, scale * Math.exp(-e.deltaY * 0.002)));
+    update();
+  }, { passive: false });
+
+  // 拖曳貼紙本體：移動，並且選取它
   s.addEventListener('pointerdown', e => {
     e.preventDefault();
     e.stopPropagation();          // 不要讓畫布跟著被拖走
+    selectSticker(s);
     document.body.classList.add('dragging');
     const move = ev => {
       const p = toWorld(ev.clientX, ev.clientY);
@@ -441,7 +483,32 @@ function addSticker(ch, x, y) {
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   });
+
+  // 拖曳旋轉把手：貼紙的「上方」永遠朝向滑鼠，滑鼠繞著貼紙走，貼紙就跟著轉
+  handle.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();          // 不要觸發貼紙的「移動」
+    selectSticker(s);
+    document.body.classList.add('dragging');
+    const r = s.getBoundingClientRect();          // 貼紙中心在螢幕上的位置
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const move = ev => {
+      // atan2 算出「中心 -> 滑鼠」的角度；+90 是因為把手在貼紙的上方
+      rot = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI + 90;
+      update();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.classList.remove('dragging');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+
   layer.appendChild(s);
+  selectSticker(s);               // 剛貼上去的貼紙先選起來，方便馬上調整
 }
 
 /* ===================== 【區塊】7. 拖曳調整分區大小 ===================== */

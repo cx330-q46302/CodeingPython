@@ -137,9 +137,17 @@ button {
 }
 .tray-emoji { font-size: 24px; cursor: grab; user-select: none; touch-action: none; }
 .sticker {
-  position: absolute; font-size: 44px; cursor: grab; user-select: none;
+  position: absolute; font-size: 44px; line-height: 1; cursor: grab; user-select: none;
   transform: translate(-50%, -50%); pointer-events: auto; touch-action: none;
 }
+/* 被選取的貼紙：虛線框 + 上方一顆藍色的旋轉把手 */
+.sticker.selected { outline: 2px dashed #3b82f6; outline-offset: 4px; }
+.rot-handle {
+  display: none; position: absolute; left: 50%; top: -24px; width: 14px; height: 14px;
+  border-radius: 50%; background: #3b82f6; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4); cursor: crosshair; touch-action: none;
+}
+.sticker.selected .rot-handle { display: block; }
 .ghost {
   position: fixed; font-size: 44px; pointer-events: none; z-index: 99;
   transform: translate(-50%, -50%);
