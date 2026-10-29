@@ -14,8 +14,15 @@
     <h1> Python 小畫家</h1>
     <select id="examples" title="載入範例程式">
       <option value="">載入範例…</option>
-      <option value="square">正方形（迴圈）</option>
-      <option value="pumpkin">多瓣南瓜（迴圈）</option>
+      <option value="square">正方形(基礎)</option>
+      <option value="circle">圓形(基礎)</option>
+      <option value="flower">花(基礎)</option>
+      <option value="pumpkin">南瓜</option>
+      <option value="web">蜘蛛網</option>
+      <option value="bat">蝙蝠</option>
+      <option value="spider">大蜘蛛</option>
+      <option value="castle">城堡</option>
+      <option value="halloween">萬聖節</option>
     </select>
     <span id="status">載入 Python 中…</span>
     <button id="themeBtn" title="切換淺色／深色">🌙 深色</button>
@@ -55,10 +62,10 @@
       <div class="label">Python 程式碼</div>
       <div id="palette">
         <div class="pal-row" id="lineColors">
-          <span class="pal-title"> 線條顏色</span>
+          <span class="pal-title">線條顏色</span>
         </div>
         <div class="pal-row" id="fillColors">
-          <span class="pal-title"> 填色</span>
+          <span class="pal-title">填色</span>
         </div>
       </div>
       <div id="editorHost">
@@ -68,12 +75,12 @@ t = turtle.Turtle()
 t.color("orange")      # 改改看：red、blue、green、purple…
 t.pensize(3)
 
-# 用迴圈畫一個正方形 :D
+# 用迴圈畫一個正方形
 for i in range(4):
     t.forward(100)
     t.left(90)
 
-print("畫好了！")
+print("畫好囉！")
 </textarea>
       </div>
     </section>
@@ -82,4 +89,3 @@ print("畫好了！")
 <script src="Codeing.js"></script>
 </body>
 </html>
-
